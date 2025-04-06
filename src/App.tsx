@@ -1,5 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase';
+import { useAppDispatch } from './store/hooks';
+import { setUser } from './store/slices/authSlice';
 import AuthProvider, { useAuth } from './auth/AuthProvider';
 import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -28,6 +32,27 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // App component with routing
 const AppRoutes = () => {
   const { isAuthenticated } = useAuth();
+  const dispatch = useAppDispatch();
+  
+  // Initialize Redux store with Firebase auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        // Format Firebase user to our User interface
+        const user = {
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+          photoURL: firebaseUser.photoURL
+        };
+        dispatch(setUser(user));
+      } else {
+        dispatch(setUser(null));
+      }
+    });
+
+    return () => unsubscribe();
+  }, [dispatch]);
 
   return (
     <Routes>

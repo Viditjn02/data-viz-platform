@@ -1,8 +1,30 @@
-import React, { useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { colors } from "../theme/colors";
 import EnhancedChart from "../components/EnhancedChart";
 import VariablesPanel from "../components/VariablesPanel";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import { 
+  setActiveTab, 
+  setSearchQuery, 
+  toggleNotifications, 
+  toggleBestScenario,
+  openEditModal as openEditModalAction,
+  closeEditModal as closeEditModalAction,
+  toggleLogoutPopup as toggleLogoutPopupAction,
+  clearNotifications
+} from "../store/slices/uiSlice";
+import { 
+  setVariables, 
+  toggleVariableActive, 
+  addVariable,
+  selectScenario,
+  addKpiCard,
+  fetchDashboardData,
+  VariableItem
+} from "../store/slices/dashboardSlice";
+import { logoutUser } from "../store/slices/authSlice";
+import { RootState } from "../store";
 
 const LightningIcon = () => (
   <svg width={24} height={24} viewBox="0 0 30 30" fill="none">
@@ -128,20 +150,12 @@ const ChevronDownIcon = () => (
   </svg>
 );
 
-// Types for the Edit Variables Modal props
-interface VariableItem {
-  id: string;
-  name: string;
-  description: string;
-  active: boolean;
-  category: string;
-}
-
+// Edit Variables Modal props
 interface EditVariablesModalProps {
   isOpen: boolean;
   onClose: () => void;
   variables: VariableItem[];
-  setVariables: React.Dispatch<React.SetStateAction<VariableItem[]>>;
+  setVariables: (variables: VariableItem[]) => void;
 }
 
 // Edit Variables Modal Component
@@ -293,63 +307,77 @@ const EditVariablesModal: React.FC<EditVariablesModalProps> = ({ isOpen, onClose
 };
 
 const HomeScreen = () => {
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('Charging Stations');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(3);
-  const [showBestScenario, setShowBestScenario] = useState(true);
-  const [showLogoutPopup, setShowLogoutPopup] = useState(false);
-  const { user, logout } = useAuth();
+  const dispatch = useAppDispatch();
   
-  // Define variables state at the parent level to share between components
-  const [variables, setVariables] = useState<VariableItem[]>([
-    { id: '1', name: 'CO2 Distribution', description: 'Carbon dioxide distribution across charging stations', active: true, category: 'Environmental' },
-    { id: '2', name: 'Fleet Sizing', description: 'Number of vehicles in the fleet', active: true, category: 'Operations' },
-    { id: '3', name: 'Border Rate', description: 'Rate at which vehicles cross defined zones', active: true, category: 'Operations' },
-    { id: '4', name: 'Request Rate', description: 'Frequency of charging requests', active: false, category: 'User Demand' },
-    { id: '5', name: 'Battery Efficiency', description: 'Efficiency of the battery charging cycle', active: false, category: 'Environmental' },
-    { id: '6', name: 'Utilization Rate', description: 'Rate of station utilization throughout the day', active: false, category: 'Operations' },
-    { id: '7', name: 'Peak Hours', description: 'Hours with highest demand for charging', active: false, category: 'User Demand' },
-    { id: '8', name: 'Energy Source Mix', description: 'Composition of energy sources used for charging', active: false, category: 'Environmental' },
-  ]);
+  // Get state from Redux store
+  const { user } = useAuth();
+  const { 
+    activeTab, 
+    searchQuery, 
+    showNotifications, 
+    notificationCount,
+    showBestScenario,
+    isEditModalOpen,
+    showLogoutPopup
+  } = useAppSelector((state: RootState) => state.ui);
+  
+  const {
+    variables,
+    kpiCards,
+    scenarios,
+    selectedScenario,
+    loading
+  } = useAppSelector((state: RootState) => state.dashboard);
+  
+  // Fetch dashboard data on component mount
+  useEffect(() => {
+    dispatch(fetchDashboardData());
+  }, [dispatch]);
 
-  const openEditModal = () => setIsEditModalOpen(true);
-  const closeEditModal = () => setIsEditModalOpen(false);
-
-  // Toggle logout popup
-  const toggleLogoutPopup = () => {
-    setShowLogoutPopup(!showLogoutPopup);
-  };
-
-  // Handle user logout
-  const handleLogout = () => {
-    logout();
-    setShowLogoutPopup(false);
-  };
-
-  // Handle main navigation tabs
+  // Handle tab change
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-  };
-
-  // Toggle notifications panel
-  const handleToggleNotifications = () => {
-    setShowNotifications(!showNotifications);
-    // Clear notification count when opening
-    if (!showNotifications) {
-      setNotificationCount(0);
-    }
+    dispatch(setActiveTab(tab));
   };
 
   // Handle search
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
+    dispatch(setSearchQuery(e.target.value));
+  };
+
+  // Toggle notifications
+  const handleToggleNotifications = () => {
+    dispatch(toggleNotifications());
+    // Clear notification count when opening
+    if (!showNotifications) {
+      dispatch(clearNotifications());
+    }
+  };
+
+  // Open edit variables modal
+  const handleOpenEditModal = () => {
+    dispatch(openEditModalAction());
+  };
+
+  // Close edit variables modal
+  const closeEditModal = () => {
+    dispatch(closeEditModalAction());
+  };
+
+  // Toggle logout popup
+  const handleToggleLogoutPopup = (e) => {
+    e.stopPropagation(); // Prevent event bubbling
+    dispatch(toggleLogoutPopupAction());
+  };
+
+  // Handle user logout
+  const handleLogout = (e) => {
+    e.stopPropagation(); // Prevent event bubbling
+    dispatch(logoutUser());
   };
 
   // Toggle best scenario section visibility
   const toggleBestScenario = () => {
-    setShowBestScenario(!showBestScenario);
+    dispatch(toggleBestScenario());
   };
 
   // Handle sharing dashboard
@@ -377,23 +405,48 @@ const HomeScreen = () => {
     alert(`Options for scenario "${scenario}": View details, Export, Save as favorite`);
   };
 
+  // Reference for the user dropdown
+  const userDropdownRef = useRef(null);
+
+  // Handle outside click for user profile dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
+        if (showLogoutPopup) {
+          dispatch(toggleLogoutPopupAction());
+        }
+      }
+    }
+    
+    // Add event listener when popup is open
+    if (showLogoutPopup) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showLogoutPopup, dispatch]);
+
   return (
     <div className="flex h-screen bg-[#0E0D0D] text-white">
       {/* Sidebar */}
       <div className="w-16 bg-[#121212] flex flex-col items-center py-4 space-y-8">
-        <button className="p-2 hover:bg-[#1A1A1A] rounded transition-colors" title="Menu">
+        <button className="p-2 hover:bg-[#1A1A1A] rounded transition-colors btn-glow" title="Menu">
           <svg width={24} height={24} viewBox="0 0 24 24" fill="none">
             <path d="M3 18H21V16H3V18ZM3 13H21V11H3V13ZM3 6V8H21V6H3Z" fill="white" />
           </svg>
         </button>
-        <button 
-          className={`p-2 ${activeTab === 'Charging Stations' ? 'bg-[#242424]' : 'hover:bg-[#1A1A1A]'} rounded transition-colors`} 
+        <button
+          className={`p-2 ${activeTab === 'Charging Stations' ? 'bg-[#242424]' : 'hover:bg-[#1A1A1A]'} rounded transition-colors btn-glow`} 
           title="Dashboard"
+          onClick={() => handleTabChange('Charging Stations')}
         >
           <HomeIcon />
         </button>
-        <button 
-          className="p-2 hover:bg-[#1A1A1A] rounded transition-colors relative" 
+        <button
+          className="p-2 hover:bg-[#1A1A1A] rounded transition-colors relative btn-glow"
           title="Notifications"
           onClick={handleToggleNotifications}
         >
@@ -404,39 +457,85 @@ const HomeScreen = () => {
             </span>
           )}
         </button>
-        <button 
-          className="p-2 hover:bg-[#1A1A1A] rounded transition-colors" 
+        <button
+          className="p-2 hover:bg-[#1A1A1A] rounded transition-colors btn-glow"
           title="Projects"
           onClick={navigateToProjects}
         >
           <ProjectsIcon />
         </button>
-        <button 
-          className="p-2 hover:bg-[#1A1A1A] rounded transition-colors" 
+        <button
+          className="p-2 hover:bg-[#1A1A1A] rounded transition-colors btn-glow"
           title="Settings"
           onClick={openSettings}
         >
           <SettingsIcon />
         </button>
         <div className="flex-grow"></div>
-        <button 
-          className="p-2 hover:bg-[#1A1A1A] rounded transition-colors relative" 
-          onClick={toggleLogoutPopup} 
+        <button
+          className="p-2 hover:bg-[#1A1A1A] rounded transition-colors relative btn-glow"
+          onClick={handleToggleLogoutPopup}
           title="User profile"
         >
           <UserIcon />
           {showLogoutPopup && (
-            <div className="absolute bottom-12 left-0 w-32 bg-[#121212] border border-[#242424] rounded shadow-lg z-10">
-              <div className="p-3 border-b border-[#242424]">
-                <p className="text-sm">{user?.name || 'User'}</p>
-                <p className="text-xs text-[#858882]">{user?.email || ''}</p>
+            <div 
+              ref={userDropdownRef}
+              className="absolute bottom-12 left-0 w-64 bg-[#121212] border border-[#242424] rounded shadow-lg z-50 animate-fade-in"
+            >
+              <div className="p-4 border-b border-[#242424] flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-[#1A1A1A] flex items-center justify-center text-[#C8E972] font-bold text-xl">
+                  {user?.name?.charAt(0) || 'U'}
+                </div>
+                <div>
+                  <p className="text-base font-medium text-white">{user?.name || 'User'}</p>
+                  <p className="text-xs text-[#858882]">{user?.email || ''}</p>
+                </div>
               </div>
-              <button 
-                className="w-full text-left p-3 hover:bg-[#1A1A1A] transition-colors text-red-400"
-                onClick={handleLogout}
-              >
-                Logout
-              </button>
+              
+              <div className="p-3 border-b border-[#242424]">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-[#858882]">Role</span>
+                  <span className="text-sm text-white">Administrator</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-[#858882]">Status</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    <span className="text-sm text-white">Active</span>
+                  </span>
+                </div>
+              </div>
+              
+              <div className="p-3 flex flex-col gap-2">
+                <button
+                  className="w-full text-left p-2 hover:bg-[#1A1A1A] rounded transition-standard flex items-center gap-2 hover-lift btn-glow"
+                >
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                    <path d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z" fill="white" />
+                  </svg>
+                  <span className="text-sm">Profile Settings</span>
+                </button>
+                
+                <button
+                  className="w-full text-left p-2 hover:bg-[#1A1A1A] rounded transition-standard flex items-center gap-2 hover-lift btn-glow"
+                >
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                    <path d="M19.14 12.94C19.18 12.64 19.2 12.33 19.2 12C19.2 11.68 19.18 11.36 19.13 11.06L21.16 9.48C21.34 9.34 21.39 9.07 21.28 8.87L19.36 5.55C19.24 5.33 18.99 5.26 18.77 5.33L16.38 6.29C15.88 5.91 15.35 5.59 14.76 5.35L14.4 2.81C14.36 2.57 14.16 2.4 13.92 2.4H10.08C9.84 2.4 9.65 2.57 9.61 2.81L9.25 5.35C8.66 5.59 8.12 5.91 7.63 6.29L5.24 5.33C5.02 5.26 4.77 5.33 4.65 5.55L2.74 8.87C2.62 9.08 2.66 9.34 2.86 9.48L4.89 11.06C4.84 11.36 4.8 11.69 4.8 12C4.8 12.31 4.82 12.64 4.87 12.94L2.84 14.52C2.66 14.66 2.61 14.93 2.72 15.13L4.64 18.45C4.76 18.67 5.01 18.74 5.23 18.67L7.62 17.71C8.12 18.09 8.65 18.41 9.24 18.65L9.6 21.19C9.65 21.43 9.84 21.6 10.08 21.6H13.92C14.16 21.6 14.36 21.43 14.39 21.19L14.75 18.65C15.34 18.41 15.88 18.09 16.37 17.71L18.76 18.67C18.98 18.74 19.23 18.67 19.35 18.45L21.27 15.13C21.39 14.91 21.34 14.66 21.15 14.52L19.14 12.94Z" fill="white" />
+                  </svg>
+                  <span className="text-sm">Account Settings</span>
+                </button>
+                
+                <button
+                  className="w-full text-left p-2 hover:bg-[#1A1A1A] rounded transition-standard flex items-center gap-2 text-red-400 hover-lift btn-glow mt-2"
+                  onClick={handleLogout}
+                >
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                    <path d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.58L17 17L22 12L17 7ZM4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z" fill="currentColor" />
+                  </svg>
+                  <span className="text-sm">Logout</span>
+                </button>
+              </div>
             </div>
           )}
         </button>
@@ -447,19 +546,19 @@ const HomeScreen = () => {
         {/* Top Navigation */}
         <div className="flex items-center px-4 py-2 border-b border-[#1A1A1A]">
           <button 
-            className={`px-4 py-2 ${activeTab === 'Charging Stations' ? 'bg-[#1A1A1A]' : ''} rounded mr-2 transition-colors`}
+            className={`px-4 py-2 ${activeTab === 'Charging Stations' ? 'bg-[#1A1A1A]' : ''} rounded mr-2 transition-colors hover:bg-[#242424] transition-standard btn-glow`}
             onClick={() => handleTabChange('Charging Stations')}
           >
             Charging Stations
           </button>
           <button 
-            className={`px-4 py-2 ${activeTab === 'Fleet Sizing' ? 'bg-[#1A1A1A]' : ''} rounded mr-2 transition-colors`}
+            className={`px-4 py-2 ${activeTab === 'Fleet Sizing' ? 'bg-[#1A1A1A]' : ''} rounded mr-2 transition-colors hover:bg-[#242424] transition-standard btn-glow`}
             onClick={() => handleTabChange('Fleet Sizing')}
           >
             Fleet Sizing
           </button>
           <button 
-            className={`px-4 py-2 ${activeTab === 'Parking' ? 'bg-[#1A1A1A]' : ''} rounded transition-colors`}
+            className={`px-4 py-2 ${activeTab === 'Parking' ? 'bg-[#1A1A1A]' : ''} rounded transition-colors hover:bg-[#242424] transition-standard btn-glow`}
             onClick={() => handleTabChange('Parking')}
           >
             Parking
@@ -471,8 +570,8 @@ const HomeScreen = () => {
               <svg className="absolute left-3 top-1/2 transform -translate-y-1/2" width={16} height={16} viewBox="0 0 24 24" fill="none">
                 <path d="M15.5 14H14.71L14.43 13.73C15.41 12.59 16 11.11 16 9.5C16 5.91 13.09 3 9.5 3C5.91 3 3 5.91 3 9.5C3 13.09 5.91 16 9.5 16C11.11 16 12.59 15.41 13.73 14.43L14 14.71V15.5L19 20.49L20.49 19L15.5 14ZM9.5 14C7.01 14 5 11.99 5 9.5C5 7.01 7.01 5 9.5 5C11.99 5 14 7.01 14 9.5C14 11.99 11.99 14 9.5 14Z" fill="#858882" />
               </svg>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Search" 
                 className="bg-[#1A1A1A] text-white pl-10 pr-4 py-2 rounded w-64 focus:outline-none" 
                 value={searchQuery}
@@ -485,27 +584,27 @@ const HomeScreen = () => {
         {/* Main Content Area */}
         <div className="flex-1 overflow-auto p-6">
           {/* Header with Title and Actions */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-8 animate-fade-in-up">
             <div className="flex items-center gap-2">
             <LightningIcon />
               <h1 className="text-3xl font-bold">{activeTab}</h1>
             </div>
             <div className="flex gap-2">
-              <button 
-                className="p-2 bg-[#1A1A1A] rounded flex items-center hover:bg-[#242424] transition-colors"
+              <button
+                className="p-2 bg-[#1A1A1A] rounded flex items-center hover:bg-[#242424] transition-standard hover-lift btn-glow"
                 title="History"
               >
                 <HistoryIcon />
               </button>
               <button 
-                className="px-4 py-2 bg-[#1A1A1A] rounded hover:bg-[#242424] transition-colors"
-                onClick={openEditModal}
+                className="px-4 py-2 bg-[#1A1A1A] rounded hover:bg-[#242424] transition-standard hover-lift btn-glow"
+                onClick={handleOpenEditModal}
                 title="Edit Variables"
               >
                 Edit Variables
               </button>
               <button 
-                className="p-2 bg-[#1A1A1A] rounded hover:bg-[#242424] transition-colors"
+                className="p-2 bg-[#1A1A1A] rounded hover:bg-[#242424] transition-standard hover-lift btn-glow"
                 onClick={handleShare}
                 title="Share"
               >
@@ -515,13 +614,13 @@ const HomeScreen = () => {
           </div>
 
           {/* Best Scenario Results Section */}
-          <div className="mb-8">
+          <div className="mb-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
             <div className="flex items-center gap-2 mb-4">
               <span className="text-2xl font-semibold text-[#C8E972]">✧</span>
               <h2 className="text-2xl font-semibold text-[#C8E972]">Best Scenario Results</h2>
               <div className="flex-grow"></div>
-              <button 
-                className="p-1 rounded-full hover:bg-[#242424] transition-colors"
+              <button
+                className="p-1 rounded-full hover:bg-[#242424] transition-standard"
                 onClick={toggleBestScenario}
                 title={showBestScenario ? "Hide scenarios" : "Show scenarios"}
               >
@@ -530,24 +629,24 @@ const HomeScreen = () => {
             </div>
 
             {showBestScenario && (
-              <div className="space-y-4">
-                <div className="p-4 rounded bg-[#121212] border border-[#242424] flex justify-between items-center">
+              <div className="space-y-4 animate-fade-in">
+                <div className="p-4 rounded bg-[#121212] border border-[#242424] flex justify-between items-center hover-glow transition-standard">
                   <p className="text-[#C8E972]">
                     The best found configuration based on profit is characterized by 11 zones (max) with charging stations and 48 total number of poles.
                   </p>
                   <button 
-                    className="hover:bg-[#242424] rounded p-1 transition-colors"
+                    className="hover:bg-[#242424] rounded p-1 transition-standard"
                     onClick={() => openScenarioMenu('Profit-based scenario')}
                   >
                     <MoreVertIcon />
                   </button>
                 </div>
-                <div className="p-4 rounded bg-[#121212] border border-[#242424] flex justify-between items-center">
+                <div className="p-4 rounded bg-[#121212] border border-[#242424] flex justify-between items-center hover-glow transition-standard">
                   <p className="text-[#C8E972]">
                     The best found configuration based on satisfied demand is characterized by 11 zones (max) with charging stations and 48 total number of poles.
                   </p>
-                  <button 
-                    className="hover:bg-[#242424] rounded p-1 transition-colors"
+                  <button
+                    className="hover:bg-[#242424] rounded p-1 transition-standard"
                     onClick={() => openScenarioMenu('Demand-based scenario')}
                   >
                     <MoreVertIcon />
@@ -558,7 +657,7 @@ const HomeScreen = () => {
           </div>
 
           {/* Dashboard Content */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             {/* Chart Section - Takes up 2/3 of the space */}
             <div className="lg:col-span-2">
               <EnhancedChart />
@@ -567,14 +666,14 @@ const HomeScreen = () => {
             {/* KPI Section - Takes up 1/3 of the space */}
             <div className="lg:col-span-1">
               <div className="space-y-6">
-                {/* Variables Panel - Removed */}
+                {/* Variables Panel - Removing as requested */}
                 
-                {/* KPI Cards */}
-                <div className="bg-[#121212] p-4 rounded border border-[#242424] h-[calc(100%-1rem)]">
+                {/* KPI Cards - Now takes the full space */}
+                <div className="bg-[#121212] p-4 rounded border border-[#242424] transition-standard">
                   <div className="flex justify-between items-center mb-3">
                     <h2 className="text-2xl font-semibold">Key Performance Indicators</h2>
                     <button 
-                      className="bg-[#1A1A1A] p-1 rounded flex items-center gap-1 hover:bg-[#242424] transition-colors"
+                      className="bg-[#1A1A1A] p-1 rounded flex items-center gap-1 hover:bg-[#242424] transition-standard hover-lift btn-glow"
                       onClick={handleAddKpiVariable}
                       title="Add KPI variable"
                     >
@@ -585,10 +684,10 @@ const HomeScreen = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* KPI Card 1 */}
-                    <div className="bg-[#1A1A1A] p-3 rounded border border-[#242424]">
+                    <div className="bg-[#1A1A1A] p-3 rounded border border-[#242424] hover-lift transition-standard animate-fade-in" style={{ animationDelay: '0.1s' }}>
                       <div className="flex justify-between mb-1">
                         <h3 className="font-medium">Infrastructure Units</h3>
-                        <button className="hover:opacity-75 transition-opacity" title="More information">
+                        <button className="hover:opacity-75 transition-standard" title="More information">
                           <InfoIcon />
                         </button>
                       </div>
@@ -597,10 +696,10 @@ const HomeScreen = () => {
                     </div>
                     
                     {/* KPI Card 2 */}
-                    <div className="bg-[#1A1A1A] p-3 rounded border border-[#242424]">
+                    <div className="bg-[#1A1A1A] p-3 rounded border border-[#242424] hover-lift transition-standard animate-fade-in" style={{ animationDelay: '0.2s' }}>
                       <div className="flex justify-between mb-1">
                         <h3 className="font-medium">Charging Growth</h3>
-                        <button className="hover:opacity-75 transition-opacity" title="More information">
+                        <button className="hover:opacity-75 transition-standard" title="More information">
                           <InfoIcon />
                         </button>
                       </div>
@@ -609,10 +708,10 @@ const HomeScreen = () => {
                     </div>
                     
                     {/* KPI Card 3 */}
-                    <div className="bg-[#1A1A1A] p-3 rounded border border-[#242424]">
+                    <div className="bg-[#1A1A1A] p-3 rounded border border-[#242424] hover-lift transition-standard animate-fade-in" style={{ animationDelay: '0.3s' }}>
                       <div className="flex justify-between mb-1">
                         <h3 className="font-medium">Localization change</h3>
-                        <button className="hover:opacity-75 transition-opacity" title="More information">
+                        <button className="hover:opacity-75 transition-standard" title="More information">
                           <InfoIcon />
                         </button>
                       </div>
@@ -621,10 +720,10 @@ const HomeScreen = () => {
                     </div>
                     
                     {/* KPI Card 4 */}
-                    <div className="bg-[#1A1A1A] p-3 rounded border border-[#242424]">
+                    <div className="bg-[#1A1A1A] p-3 rounded border border-[#242424] hover-lift transition-standard animate-fade-in" style={{ animationDelay: '0.4s' }}>
                       <div className="flex justify-between mb-1">
                         <h3 className="font-medium">Fleet growth</h3>
-                        <button className="hover:opacity-75 transition-opacity" title="More information">
+                        <button className="hover:opacity-75 transition-standard" title="More information">
                           <InfoIcon />
                         </button>
                       </div>
@@ -641,26 +740,26 @@ const HomeScreen = () => {
 
       {/* Notifications Panel */}
       {showNotifications && (
-        <div className="absolute right-0 top-16 w-80 bg-[#121212] border border-[#242424] rounded shadow-lg z-10 p-4">
+        <div className="absolute right-0 top-16 w-80 bg-[#121212] border border-[#242424] rounded shadow-lg z-10 p-4 animate-fade-in">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold">Notifications</h3>
             <button 
-              className="text-xs text-[#C8E972] hover:underline"
-              onClick={() => setShowNotifications(false)}
+              className="text-xs text-[#C8E972] hover:underline transition-standard"
+              onClick={handleToggleNotifications}
             >
               Close
             </button>
           </div>
           <div className="space-y-3">
-            <div className="p-2 border-b border-[#242424]">
+            <div className="p-2 border-b border-[#242424] animate-fade-in-right" style={{ animationDelay: '0.1s' }}>
               <p className="text-sm">New scenario calculation completed</p>
               <p className="text-xs text-[#858882]">2 minutes ago</p>
             </div>
-            <div className="p-2 border-b border-[#242424]">
+            <div className="p-2 border-b border-[#242424] animate-fade-in-right" style={{ animationDelay: '0.2s' }}>
               <p className="text-sm">System update available</p>
               <p className="text-xs text-[#858882]">1 hour ago</p>
             </div>
-            <div className="p-2">
+            <div className="p-2 animate-fade-in-right" style={{ animationDelay: '0.3s' }}>
               <p className="text-sm">Monthly report is ready</p>
               <p className="text-xs text-[#858882]">Yesterday</p>
             </div>
@@ -669,11 +768,11 @@ const HomeScreen = () => {
       )}
 
       {/* Edit Variables Modal */}
-      <EditVariablesModal 
-        isOpen={isEditModalOpen} 
-        onClose={closeEditModal} 
+      <EditVariablesModal
+        isOpen={isEditModalOpen}
+        onClose={closeEditModal}
         variables={variables}
-        setVariables={setVariables}
+        setVariables={(newVars) => dispatch(setVariables(newVars))}
       />
     </div>
   );

@@ -38,6 +38,8 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
   const [showDetailsCard, setShowDetailsCard] = useState(false);
   const [detailsPosition, setDetailsPosition] = useState({ x: 0, y: 0 });
   const chartRef = useRef<HTMLDivElement>(null);
+  const [isPersistent, setIsPersistent] = useState(false);
+  const [showInsightDetails, setShowInsightDetails] = useState(false);
   
   // Convert data values to SVG coordinates
   const maxValue = Math.max(...chartData.map(d => d.value));
@@ -67,32 +69,39 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
         y: rect.top + pointPositions[index].y
       });
       
-      // Show details card with slight delay for better UX
-      setTimeout(() => {
-        setShowDetailsCard(true);
-      }, 100);
+      // Only show details if not in persistent mode
+      if (!isPersistent) {
+        // Show details card with slight delay for better UX
+        setTimeout(() => {
+          setShowDetailsCard(true);
+        }, 100);
+      }
     }
   };
   
   // Handle mouse leave to hide details
   const handleMouseLeave = () => {
-    // Add a delay before hiding the details to prevent flicker when moving between points
-    setTimeout(() => {
-      if (activePoint === null) {
+    // Only hide details if not in persistent mode
+    if (!isPersistent) {
+      // Hide details card when mouse leaves the chart area
+      setTimeout(() => {
         setShowDetailsCard(false);
-      }
-    }, 100);
+      }, 200);
+    }
   };
 
   // Handle click on data point for persistent details view
   const handlePointClick = (index: number) => {
     setActivePoint(index);
     setShowDetailsCard(true);
+    // Set a flag to make the details persist until explicitly closed
+    setIsPersistent(true);
   };
   
   // Close details card
   const closeDetails = () => {
     setShowDetailsCard(false);
+    setIsPersistent(false);
   };
   
   // Listen for clicks outside to close details
@@ -110,32 +119,41 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
     return () => {
       document.removeEventListener('click', handleOutsideClick);
     };
-  }, [showDetailsCard]);
+  }, [showDetailsCard, isPersistent]);
+  
+  // Toggle insights details
+  const toggleInsightDetails = () => {
+    setShowInsightDetails(!showInsightDetails);
+  };
   
   return (
-    <div className="bg-[#121212] rounded border border-[#242424] p-6">
+    <div 
+      ref={chartRef} 
+      className="bg-[#121212] p-6 rounded border border-[#242424] h-full transition-standard animate-fade-in-up"
+      onMouseLeave={handleMouseLeave}
+    >
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-semibold text-white">Graphs</h2>
-        <div className="relative">
-          <select className="appearance-none bg-[#1A1A1A] text-white px-4 py-2 pr-8 rounded border border-[#242424] focus:outline-none">
-            <option>{title}</option>
-            <option>Revenue Growth</option>
-            <option>Energy Consumption</option>
-          </select>
-          <svg className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none" width={16} height={16} viewBox="0 0 24 24" fill="none">
-            <path d="M7 10L12 15L17 10H7Z" fill="white" />
-          </svg>
+        <h2 className="text-2xl font-semibold text-white">Unsatisfied Demand %</h2>
+        <div className="flex gap-2">
+          <button className="bg-[#1A1A1A] px-3 py-1 rounded text-sm transition-standard hover-lift btn-glow">
+            30 Days
+          </button>
+          <button className="bg-[#1A1A1A] px-3 py-1 rounded text-sm transition-standard hover-lift btn-glow">
+            All Time
+          </button>
         </div>
       </div>
-
-      <div className="h-[300px] relative" ref={chartRef} onMouseLeave={handleMouseLeave}>
-        <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-xs text-[#858882]">
-          <span>$100K</span>
-          <span>$80K</span>
-          <span>$60K</span>
-          <span>$40K</span>
-          <span>$20K</span>
+      
+      <div className="h-72 flex relative mb-4">
+        {/* Y-axis labels */}
+        <div className="flex flex-col justify-between text-xs text-[#858882] pr-2">
+          <span>100%</span>
+          <span>75%</span>
+          <span>50%</span>
+          <span>25%</span>
+          <span>0%</span>
         </div>
+        
         <div className="absolute left-10 right-0 top-0 bottom-0 border-l border-[#242424]">
           <div className="w-full h-full relative">
             {/* Chart grid lines */}
@@ -154,7 +172,18 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
             
             {/* Line chart - using SVG for the actual line */}
             <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-              <path d={pathCommand} stroke="#C8E972" strokeWidth="2" fill="none" />
+              <path 
+                d={pathCommand} 
+                stroke="#C8E972" 
+                strokeWidth="2" 
+                fill="none" 
+                className="transition-standard"
+                style={{
+                  strokeDasharray: "1000",
+                  strokeDashoffset: "1000",
+                  animation: "dash 1.5s ease-in-out forwards"
+                }}
+              />
               
               {/* Data points with hover effects */}
               {pointPositions.map((point, index) => (
@@ -176,10 +205,12 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
                     cy={point.y} 
                     r={activePoint === index ? "6" : "4"} 
                     fill="#C8E972" 
-                    className={activePoint === index ? "animate-pulse" : ""}
+                    className={activePoint === index ? "animate-pulse-soft" : ""}
                     style={{
-                      transition: "r 0.2s ease-in-out",
-                      filter: activePoint === index ? "drop-shadow(0 0 3px rgba(200, 233, 114, 0.7))" : "none"
+                      transition: "r 0.2s ease-in-out, filter 0.2s ease-in-out",
+                      filter: activePoint === index ? "drop-shadow(0 0 3px rgba(200, 233, 114, 0.7))" : "none",
+                      opacity: 0,
+                      animation: `fadeIn 0.3s ease-in-out ${index * 0.1}s forwards`
                     }}
                   />
                   
@@ -193,49 +224,96 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
                       stroke="#C8E972" 
                       strokeWidth="1" 
                       strokeDasharray="4" 
+                      className="animate-fade-in"
                     />
                   )}
                 </g>
               ))}
               
               {/* Simple tooltip for active point */}
-              {activePoint !== null && !showDetailsCard && (
-                <foreignObject 
-                  x={pointPositions[activePoint].x - 40} 
-                  y={pointPositions[activePoint].y - 60} 
-                  width="80" 
-                  height="50"
-                  style={{ overflow: "visible" }}
-                >
-                  <div className="bg-[#1A1A1A] text-white px-2 py-1 text-xs rounded border border-[#242424] shadow-lg">
-                    <div className="font-bold">{chartData[activePoint].month}</div>
-                    <div className="text-[#C8E972]">{chartData[activePoint].formatted}</div>
-                  </div>
-                </foreignObject>
+              {activePoint !== null && (
+                <g className="animate-fade-in">
+                  <rect
+                    x={pointPositions[activePoint].x - 25}
+                    y={pointPositions[activePoint].y - 25}
+                    width="50"
+                    height="20"
+                    rx="4"
+                    fill="#242424"
+                    className="animate-fade-in-up"
+                  />
+                  <text
+                    x={pointPositions[activePoint].x}
+                    y={pointPositions[activePoint].y - 12}
+                    textAnchor="middle"
+                    fill="white"
+                    fontSize="10"
+                    className="animate-fade-in"
+                  >
+                    {chartData[activePoint].formatted}
+                  </text>
+                </g>
               )}
             </svg>
           </div>
         </div>
-        
-        {/* X-axis labels */}
-        <div className="absolute left-10 right-0 bottom-[-25px] flex justify-between text-xs text-[#858882]">
-          {chartData.map((point, index) => (
-            <div key={index} className="flex flex-col items-center">
-              <span>{point.month}</span>
-              {point.month === "May" && <span className="text-[10px]">Now</span>}
+      </div>
+      
+      {/* X-axis labels */}
+      <div className="flex justify-between px-10 text-xs text-[#858882]">
+        {chartData.map((item, index) => (
+          <span key={index}>{item.month}</span>
+        ))}
+      </div>
+      
+      {/* Information display below chart */}
+      <div className="mt-6 bg-[#1A1A1A] p-4 rounded border border-[#242424] transition-standard hover-glow cursor-pointer" onClick={toggleInsightDetails}>
+        <div className="flex items-start gap-2">
+          <div className="p-1 rounded-full bg-[#C8E972] mt-1"></div>
+          <div>
+            <div className="flex items-center justify-between">
+              <h3 className="font-medium text-white mb-1">Key Insights</h3>
+              <div className="text-xs text-[#858882]">Click to {showInsightDetails ? 'collapse' : 'expand'}</div>
             </div>
-          ))}
+            <p className="text-[#858882] text-sm">
+              The unsatisfied demand decreased significantly in October, suggesting that recent infrastructure improvements are yielding positive results. Consider maintaining the current strategy.
+            </p>
+            
+            {showInsightDetails && (
+              <div className="mt-4 pt-4 border-t border-[#242424] animate-fade-in">
+                <h4 className="text-sm font-medium text-white mb-2">Detailed Analysis</h4>
+                <ul className="space-y-2 text-[#858882] text-sm">
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#C8E972]">•</span>
+                    <span>Infrastructure efficiency increased by 24% between September and October.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#C8E972]">•</span>
+                    <span>Average charging times decreased from 42 to 36 minutes per session.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#C8E972]">•</span>
+                    <span>Utilization rates are more balanced across all stations, indicating better distribution.</span>
+                  </li>
+                </ul>
+                <div className="mt-3 pt-3 border-t border-[#242424]">
+                  <h4 className="text-sm font-medium text-white mb-2">Recommendations</h4>
+                  <p className="text-[#858882] text-sm">
+                    Continue with current infrastructure deployment while monitoring November performance. Consider expanding the most efficient station configurations to other locations.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {/* Detailed data point card */}
-      {activePoint !== null && showDetailsCard && (
-        <DataPointDetails 
-          point={chartData[activePoint]} 
-          position={detailsPosition}
-          isVisible={showDetailsCard}
-        />
-      )}
+      
+      {/* Data point details card */}
+      <DataPointDetails 
+        point={activePoint !== null ? chartData[activePoint] : null} 
+        position={detailsPosition}
+        isVisible={showDetailsCard && activePoint !== null}
+      />
     </div>
   );
 };

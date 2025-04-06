@@ -1,15 +1,9 @@
 import React from 'react';
+import { ChartDataPoint } from './EnhancedChart';
 
 interface DataPointDetailsProps {
-  point: {
-    month: string;
-    value: number;
-    formatted: string;
-  };
-  position: {
-    x: number;
-    y: number;
-  };
+  point: ChartDataPoint | null;
+  position: { x: number; y: number };
   isVisible: boolean;
 }
 
@@ -18,7 +12,7 @@ interface DataPointDetailsProps {
  * This component appears when hovering over a data point in the chart
  */
 const DataPointDetails: React.FC<DataPointDetailsProps> = ({ point, position, isVisible }) => {
-  if (!isVisible) return null;
+  if (!isVisible || !point) return null;
 
   return (
     <div 
