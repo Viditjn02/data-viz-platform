@@ -21,7 +21,7 @@ interface EnhancedChartProps {
 const EnhancedChart: React.FC<EnhancedChartProps> = ({ 
   data = [], 
   title = "Unsatisfied Demand %",
-  height = 300 
+  height = 300
 }) => {
   // Default data if none provided
   const chartData = data.length > 0 ? data : [
@@ -40,6 +40,17 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
   const chartRef = useRef<HTMLDivElement>(null);
   const [isPersistent, setIsPersistent] = useState(false);
   const [showInsightDetails, setShowInsightDetails] = useState(false);
+  const [animationStarted, setAnimationStarted] = useState(false);
+  
+  // Start animation after component mounts
+  useEffect(() => {
+    // Small delay to ensure we get a clean animation
+    const timer = setTimeout(() => {
+      setAnimationStarted(true);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
   
   // Convert data values to SVG coordinates
   const maxValue = Math.max(...chartData.map(d => d.value));
@@ -180,8 +191,8 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
                 className="transition-standard"
                 style={{
                   strokeDasharray: "1000",
-                  strokeDashoffset: "1000",
-                  animation: "dash 1.5s ease-in-out forwards"
+                  strokeDashoffset: animationStarted ? "0" : "1000",
+                  transition: "stroke-dashoffset 1.5s ease-in-out"
                 }}
               />
               
@@ -207,10 +218,10 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
                     fill="#C8E972" 
                     className={activePoint === index ? "animate-pulse-soft" : ""}
                     style={{
-                      transition: "r 0.2s ease-in-out, filter 0.2s ease-in-out",
+                      transition: "r 0.2s ease-in-out, filter 0.2s ease-in-out, opacity 0.3s ease-in-out",
                       filter: activePoint === index ? "drop-shadow(0 0 3px rgba(200, 233, 114, 0.7))" : "none",
-                      opacity: 0,
-                      animation: `fadeIn 0.3s ease-in-out ${index * 0.1}s forwards`
+                      opacity: animationStarted ? 1 : 0,
+                      transitionDelay: `${index * 0.1}s`
                     }}
                   />
                   
@@ -231,7 +242,7 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
               ))}
               
               {/* Simple tooltip for active point */}
-              {activePoint !== null && (
+              {activePoint !== null && animationStarted && (
                 <g className="animate-fade-in">
                   <rect
                     x={pointPositions[activePoint].x - 25}

@@ -1,69 +1,126 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-interface UiState {
-  activeTab: string;
-  searchQuery: string;
+// Define types for notifications
+export type NotificationSeverity = 'error' | 'warning' | 'info' | 'success';
+
+export interface Notification {
+  id: string;
+  message: string;
+  severity: NotificationSeverity;
+  duration?: number;
+}
+
+// Define the UI state structure
+export interface UiState {
+  // Loading states for different operations
+  loadingStates: {
+    [key: string]: boolean;
+  };
+  // Error notifications
+  notifications: Notification[];
+  // UI control states
+  showUserMenu: boolean;
   showNotifications: boolean;
   notificationCount: number;
   showBestScenario: boolean;
+  activeTab: string;
+  searchQuery: string;
   isEditModalOpen: boolean;
-  showLogoutPopup: boolean;
 }
 
+// Initial state
 const initialState: UiState = {
-  activeTab: 'Charging Stations',
-  searchQuery: '',
+  loadingStates: {},
+  notifications: [],
+  showUserMenu: false,
   showNotifications: false,
   notificationCount: 3,
-  showBestScenario: true,
+  showBestScenario: false,
+  activeTab: 'Charging Stations',
+  searchQuery: '',
   isEditModalOpen: false,
-  showLogoutPopup: false,
 };
 
-const uiSlice = createSlice({
+// Create the UI slice
+export const uiSlice = createSlice({
   name: 'ui',
   initialState,
   reducers: {
-    setActiveTab: (state, action: PayloadAction<string>) => {
-      state.activeTab = action.payload;
+    // Loading state management
+    setLoading: (state, action: PayloadAction<{ key: string; isLoading: boolean }>) => {
+      const { key, isLoading } = action.payload;
+      state.loadingStates[key] = isLoading;
     },
-    setSearchQuery: (state, action: PayloadAction<string>) => {
-      state.searchQuery = action.payload;
+    
+    // Notification management
+    addNotification: (state, action: PayloadAction<Omit<Notification, 'id'>>) => {
+      const id = Date.now().toString();
+      state.notifications.push({
+        id,
+        ...action.payload,
+      });
     },
+    
+    removeNotification: (state, action: PayloadAction<string>) => {
+      state.notifications = state.notifications.filter(
+        notification => notification.id !== action.payload
+      );
+    },
+    
+    clearNotifications: (state) => {
+      state.notifications = [];
+    },
+    
+    // UI control actions
+    toggleUserMenu: (state) => {
+      state.showUserMenu = !state.showUserMenu;
+    },
+    
+    setUserMenu: (state, action: PayloadAction<boolean>) => {
+      state.showUserMenu = action.payload;
+    },
+    
     toggleNotifications: (state) => {
       state.showNotifications = !state.showNotifications;
     },
+    
     setNotificationCount: (state, action: PayloadAction<number>) => {
       state.notificationCount = action.payload;
     },
+    
     toggleBestScenario: (state) => {
       state.showBestScenario = !state.showBestScenario;
     },
-    openEditModal: (state) => {
-      state.isEditModalOpen = true;
+    
+    setActiveTab: (state, action: PayloadAction<string>) => {
+      state.activeTab = action.payload;
     },
-    closeEditModal: (state) => {
-      state.isEditModalOpen = false;
+    
+    setSearchQuery: (state, action: PayloadAction<string>) => {
+      state.searchQuery = action.payload;
     },
-    toggleLogoutPopup: (state) => {
-      state.showLogoutPopup = !state.showLogoutPopup;
-    },
-    clearNotifications: (state) => {
-      state.notificationCount = 0;
+    
+    setEditModalOpen: (state, action: PayloadAction<boolean>) => {
+      state.isEditModalOpen = action.payload;
     },
   },
 });
 
+// Export actions
 export const {
-  setActiveTab,
-  setSearchQuery,
+  setLoading,
+  addNotification,
+  removeNotification,
+  clearNotifications,
+  toggleUserMenu,
+  setUserMenu,
   toggleNotifications,
   setNotificationCount,
   toggleBestScenario,
-  openEditModal,
-  closeEditModal,
-  toggleLogoutPopup,
-  clearNotifications,
+  setActiveTab,
+  setSearchQuery,
+  setEditModalOpen,
 } = uiSlice.actions;
 
+// Export reducer
 export default uiSlice.reducer; 
