@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
@@ -123,7 +123,7 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Router className="w-full h-full">
+        <Router>
           <div className="w-full h-full">
             <AppRoutes />
             <NotificationsContainer />

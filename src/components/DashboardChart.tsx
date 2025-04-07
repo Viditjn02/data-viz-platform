@@ -1,5 +1,4 @@
-import React from "react";
-import { colors, chartColors } from "../theme/colors";
+import { chartColors } from "../theme/colors";
 
 export const DashboardChart = () => {
   const data = [20, 45, 28, 80, 99, 43, 50];

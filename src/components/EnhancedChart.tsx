@@ -144,7 +144,7 @@ const EnhancedChart: React.FC<EnhancedChartProps> = ({
       onMouseLeave={handleMouseLeave}
     >
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-semibold text-white">Unsatisfied Demand %</h2>
+        <h2 className="text-2xl font-semibold text-white">{title}</h2>
         <div className="flex gap-2">
           <button className="bg-[#1A1A1A] px-3 py-1 rounded text-sm transition-standard hover-lift btn-glow">
             30 Days
